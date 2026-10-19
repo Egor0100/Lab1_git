@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lab: Docker Compose</title>
+  <style>
+    :root { --bg: #f5f5f0; --card: #fff; --fg: #1d1d1b; --muted: #6b6b66; --accent: #2f6f4f; --err: #b3261e; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #161615; --card: #22221f; --fg: #ecece6; --muted: #9a9a92; --accent: #6fbf8f; --err: #f2867e; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
+           background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+    .card { width: 100%; max-width: 460px; background: var(--card); border-radius: 14px; padding: 28px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    h1 { margin: 0 0 4px; font-size: 22px; }
+    .sub { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+    dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0 0 20px; }
+    dt { color: var(--muted); }
+    dd { margin: 0; font-family: ui-monospace, monospace; word-break: break-all; }
+    .status { font-weight: 600; }
+    .ok { color: var(--accent); } .err { color: var(--err); }
+    button { width: 100%; padding: 10px; border: 0; border-radius: 8px; background: var(--accent);
+             color: #fff; font: inherit; cursor: pointer; }
+    button:hover { opacity: .9; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Фронтенд → Бэкенд</h1>
+    <p class="sub">Страница отдаётся nginx, данные приходят из FastAPI через <code>/api/info</code></p>
+    <dl>
+      <dt>Статус</dt>     <dd id="status" class="status">загрузка…</dd>
+      <dt>Сообщение</dt>  <dd id="message">—</dd>
+      <dt>Контейнер</dt>  <dd id="hostname">—</dd>
+      <dt>Время (UTC)</dt><dd id="time">—</dd>
+      <dt>Запросов</dt>   <dd id="requests">—</dd>
+    </dl>
+    <button id="refresh">Запросить ещё раз</button>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    async function load() {
+      const status = $("status");
+      status.textContent = "загрузка…";
+      status.className = "status";
+      try {
+        const res = await fetch("/api/info");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        $("message").textContent = data.message;
+        $("hostname").textContent = data.hostname;
+        $("time").textContent = data.time;
+        $("requests").textContent = data.requests;
+        status.textContent = "бэкенд отвечает";
+        status.classList.add("ok");
+      } catch (e) {
+        status.textContent = "ошибка: " + e.message;
+        status.classList.add("err");
+      }
+    }
+
+    $("refresh").addEventListener("click", load);
+    load();
+  </script>
+</body>
+</html>

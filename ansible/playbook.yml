@@ -1,0 +1,94 @@
+---
+# Разворачивает приложение в VM: ставит Docker, копирует файлы, запускает Compose.
+# Идемпотентен: повторный запуск ничего не ломает и (если файлы не менялись) ничего не меняет.
+- name: Deploy lab app to VM
+  hosts: lab
+  become: true
+
+  vars:
+    app_dir: /opt/lab
+    project_root: "{{ playbook_dir }}/.."
+
+  tasks:
+    - name: Wait for cloud-init to finish first boot
+      ansible.builtin.command: cloud-init status --wait
+      register: cloud_init
+      changed_when: false
+      # 0 — готово, 2 — готово с некритичными предупреждениями
+      failed_when: cloud_init.rc not in [0, 2]
+
+    - name: Install Docker, Compose v2 and Buildx
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-v2
+          - docker-buildx
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Make sure Docker is running and enabled
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Allow user ubuntu to run docker without sudo
+      ansible.builtin.user:
+        name: ubuntu
+        groups: docker
+        append: true
+
+    - name: Create application directory
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copy compose.yaml
+      ansible.builtin.copy:
+        src: "{{ project_root }}/compose.yaml"
+        dest: "{{ app_dir }}/compose.yaml"
+        mode: "0644"
+      register: compose_file
+
+    - name: Copy backend and frontend sources
+      ansible.builtin.copy:
+        src: "{{ project_root }}/{{ item }}/"   # слеш в конце = копировать содержимое папки
+        dest: "{{ app_dir }}/{{ item }}/"
+        mode: preserve
+      loop:
+        - backend
+        - frontend
+      register: sources
+
+    # Пересобираем образы, только если изменились исходники или compose.yaml.
+    # Безусловный `up --build` даёт образу новый ID при каждом запуске,
+    # и compose пересоздаёт контейнеры, даже если в коде ничего не менялось.
+    - name: Rebuild images when sources changed
+      ansible.builtin.command: docker compose build
+      args:
+        chdir: "{{ app_dir }}"
+      when: sources is changed or compose_file is changed
+
+    # При первом запуске образов ещё нет, и up соберёт их сам.
+    # Дальше up пересоздаёт только те контейнеры, у которых сменился образ или конфиг.
+    - name: Start containers
+      ansible.builtin.command: docker compose up -d --remove-orphans
+      args:
+        chdir: "{{ app_dir }}"
+      register: compose_up
+      changed_when: compose_up.stderr is search('Container [^ ]+ +(Created|Recreated|Started)')
+
+    - name: Check that the frontend reaches the backend
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/api/info
+        return_content: true
+      register: api
+      until: api.status == 200
+      retries: 20
+      delay: 3
+
+    - name: Show backend response
+      ansible.builtin.debug:
+        msg: "OK: {{ api.json.message }} (контейнер {{ api.json.hostname }}, запрос №{{ api.json.requests }})"

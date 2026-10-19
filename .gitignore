@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+
+# Артефакты VM (образ, диск, cloud-init, логи)
+vm/*.img
+vm/*.img.part
+vm/*.qcow2
+vm/seed.iso
+vm/user-data
+vm/meta-data
+vm/serial.log
+vm/vm.pid

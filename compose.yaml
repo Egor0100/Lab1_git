@@ -1,0 +1,25 @@
+services:
+  backend:
+    build: ./backend
+    image: lab-backend:latest
+    environment:
+      APP_ENV: docker
+    # Порт бэкенда наружу НЕ публикуется: к нему ходит только nginx внутри сети compose
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    image: lab-frontend:latest
+    ports:
+      - "8080:80"   # ноутбук:8080 -> контейнер nginx:80
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
