@@ -20,7 +20,7 @@ def info():
     global request_count
     request_count += 1
     return {
-        "message": "Привет от бэкенда!",
+        "message": "Привет от бэкенда!/2",
         "hostname": socket.gethostname(),  # ID контейнера бэкенда
         "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "requests": request_count,
