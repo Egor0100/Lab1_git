@@ -50,6 +50,7 @@
         src: "{{ project_root }}/compose.yaml"
         dest: "{{ app_dir }}/compose.yaml"
         mode: "0644"
+      register: compose_file
 
     - name: Copy backend and frontend sources
       ansible.builtin.copy:
@@ -59,11 +60,21 @@
       loop:
         - backend
         - frontend
+      register: sources
 
-    # up -d сам решает, что делать: пересобирает образ только при изменениях
-    # (кэш слоёв) и пересоздаёт только изменившиеся контейнеры.
-    - name: Build and start containers
-      ansible.builtin.command: docker compose up -d --build --remove-orphans
+    # Пересобираем образы, только если изменились исходники или compose.yaml.
+    # Безусловный `up --build` даёт образу новый ID при каждом запуске,
+    # и compose пересоздаёт контейнеры, даже если в коде ничего не менялось.
+    - name: Rebuild images when sources changed
+      ansible.builtin.command: docker compose build
+      args:
+        chdir: "{{ app_dir }}"
+      when: sources is changed or compose_file is changed
+
+    # При первом запуске образов ещё нет, и up соберёт их сам.
+    # Дальше up пересоздаёт только те контейнеры, у которых сменился образ или конфиг.
+    - name: Start containers
+      ansible.builtin.command: docker compose up -d --remove-orphans
       args:
         chdir: "{{ app_dir }}"
       register: compose_up
